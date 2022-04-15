@@ -1,0 +1,28 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+ name: app-scaledobject
+spec:
+ scaleTargetRef:
+   kind:          Deployment       
+   name:          app
+ pollingInterval: 20                       
+ minReplicaCount: 1                        
+ maxReplicaCount: 10                       
+ advanced:                                 
+   restoreToOriginalReplicaCount: false    
+   horizontalPodAutoscalerConfig:          
+     behavior:                             
+       scaleDown:
+         stabilizationWindowSeconds: 300
+         policies:
+         - type: Percent
+           value: 25
+           periodSeconds: 60
+ triggers:
+ - type: prometheus
+   metadata:
+     serverAddress: http://prometheus-server.default.svc.cluster.local
+     metricName: haproxy_backend_current_queue
+     query: sum(avg_over_time(haproxy_backend_current_queue{proxy="default-app-http-port"}[1m]))
+     threshold: '10'
