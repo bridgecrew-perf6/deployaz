@@ -1,0 +1,104 @@
+pipeline {
+
+    agent any
+
+    options {
+    		timestamps()
+    	}
+
+    environment {
+      NAMESPACE="zion"
+      CHART_NAME="simple-app"
+    }
+    stages {
+      stage('Parameters'){
+        steps {
+          script {
+            properties([[$class: 'JiraProjectProperty'],
+            parameters([
+              choice(name:"OPERATION_PARAM",choices:['Deploy','Destroy'],description: " "),
+              ])
+              ])
+            }
+          }
+        }
+
+      stage("\u2460 checkout \u2728") {
+        steps {
+          git branch: 'deployaz',
+                  url: 'https://github.com/zcohen331/deployaz.git'
+        }  
+      }
+      stage("\u2461 Setup \u2728") {
+  			steps {
+  				sh(script: 'whoami', returnStatus: true)
+  				sh(script: 'id', returnStatus: true)
+  				sh(script: 'echo Home folder is: [$HOME]', returnStatus: true)
+  				sh(script: 'echo Current folder is: [$PWD]', returnStatus: true)
+  				echo "Job base name: [${env.JOB_BASE_NAME}]"
+  				echo "Job name: [${env.JOB_NAME}]"
+  				echo "build ID: [${env.BUILD_ID}]"
+  			}
+  		}
+
+      stage("\u2462 Ensure K8S Namespace \u2728") {
+        steps {
+          script {
+            sh('kubectl get namespace ${env.NAMESPACE} || kubectl create namespace ${env.NAMESPACE}', returnStatus: true)
+          }
+        }
+      }
+
+      stage("\u2463 Helm Lint \u2728") {
+        steps {
+          script {
+            sh('helm lint ${env.CHART_NAME}', returnStatus: true)
+          }
+        }
+      }
+
+      stage("\u2464 Helm Package \u2728") {
+        steps {
+          script {
+            sh('helm package ${env.CHART_NAME} -d . --app-version 1.16.0  --version 0.1.0', returnStatus: true)
+          }
+        }
+      }
+
+      stage("\u2465 Helm Deploy \u2728") {
+        steps {
+          script {
+            if (params.VM_OPERATION_PARAM == "Deploy") {
+              sh('helm upgrade ${env.CHART_NAME} ${env.CHART_NAME}-0.1.0.tgz -n ${env.NAMESPACE} --install --wait', returnStatus: true)
+            }
+          }
+        }
+      }
+      stage("\u2466 Helm Destroy \u2728") {
+        steps {
+          script {
+            if (params.VM_OPERATION_PARAM == "Destroy") {
+              sh('helm uninstall -n ${env.NAMESPACE} ${env.CHART_NAME}', returnStatus: true)
+            }
+          }
+        }
+      }
+    }
+  post {
+    success {
+      echo 'I succeeded!'
+    }
+    unstable {
+      echo 'I am unstable :/'
+    }
+    failure {
+      echo 'I failed :('
+    }
+    changed {
+      echo 'Things were different before...'
+    }
+  }
+}
+
+
+
